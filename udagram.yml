@@ -1,0 +1,62 @@
+Description: >
+  Hantz Alvarez / Udacity Project 2 
+  This is the root template that deployed both network and Udagram Application. 
+  with loabalancer, autoscalling, role, security group and tagging and ouputs a working link. 
+  This template only works in the Oregon region, because the AMi used belong to that region. 
+  A mapper would need to be created to make this template more portable. 
+
+
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.0.0.0/16  
+
+  VpcId:
+    Description: VPC where Udagram would be deployed
+    Type: String
+  PrivateSubnets:
+    Description: subnets where the autoscalling group would be deployed
+    Type: String
+  PublicSubnetOne:
+    Description: First Subnet for the load balan
+    Type: String
+  PublicSubnetTwo:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+
+
+Resources:
+
+  Networking:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://hantzalvarez.s3.amazonaws.com/udagramTemplate/network.yml
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        VpcCIDR: !Ref VpcCIDR
+        PublicSubnet1CIDR: 10.0.0.0/24
+        PublicSubnet2CIDR: 10.0.1.0/24
+        PrivateSubnet1CIDR: 10.0.2.0/24
+        PrivateSubnet2CIDR: 10.0.3.0/24
+
+  UdagramApp:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://hantzalvarez.s3.amazonaws.com/udagramTemplate/launchconfiguration.yml
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        VpcId: !GetAtt Networking.Outputs.VPC
+        PrivateSubnets: !Ref PrivateSubnets
+        PublicSubnetOne: !Ref PublicSubnetOne
+        PublicSubnetTwo: !Ref  PublicSubnetTwo
+
+Outputs:
+
+  LoadBalancerLink:
+    Description: The URL of UdagramLB
+    Value: !Join ["", [!GetAtt UdagramApp.Outputs.LoadBalancerLink]]

@@ -1,0 +1,27 @@
+[
+    {
+        "ParameterKey": "EnvironmentName",
+        "ParameterValue": "Udagram"
+    },
+    {
+        "ParameterKey": "PrivateSubnets",
+        "ParameterValue":  "Udagram-PRI1-SN,Udagram-PRI2-SN"
+    },
+    {
+        "ParameterKey": "PublicSubnetOne",
+        "ParameterValue": "Udagram-PUB1-SN"
+    },
+    {
+        "ParameterKey": "PublicSubnetTwo",
+        "ParameterValue": "Udagram-PUB2-SN"
+    },
+    {
+        "ParameterKey": "VpcId",
+        "ParameterValue": "Udagram-VPCID"
+    },
+
+    {
+        "ParameterKey": "VpcCIDR",
+        "ParameterValue": "10.0.0.0/16"
+    }
+]

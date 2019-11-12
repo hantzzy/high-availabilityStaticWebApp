@@ -1,0 +1,186 @@
+Description: Hantz Alvarez / Udacity Project 2 
+
+
+Parameters:
+  VpcId:
+    Description: VPC where Udagram would be deployed
+    Type: String
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names tags
+    Type: String
+  PrivateSubnets:
+    Description: subnets where the autoscalling group would be deployed
+    Type: String
+  PublicSubnetOne:
+    Description: First Subnet for the load balan
+    Type: String
+  PublicSubnetTwo:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+
+
+
+
+Resources:
+  ServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to client host
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+
+
+  UdacityS3ReadOnlyEC2:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: ec2.amazonaws.com
+          Action: sts:AssumeRole
+      Path: /
+
+  ReadS3bucketPolicy:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyName: UdacityS3ReadOnlyEC2Policy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action: 
+                - s3:Get*
+                - s3:List*
+              Resource: '*'
+        Roles:
+          - !Ref UdacityS3ReadOnlyEC2
+    
+  ProfileWithRolesForOurApp:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Path: "/"
+      Roles:
+        - 
+          Ref: "UdacityS3ReadOnlyEC2"
+  UdagramLaunchConfig: 
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties: 
+      ImageId: ami-06d51e91cea0dac8d
+      UserData: 
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          apt-get update -y
+          apt-get install unzip awscli -y
+          apt-get install apache2 -y
+          systemctl start apache2.service
+          cd /var/www/html
+          aws s3 cp s3://udacity-demo-1/udacity.zip .
+          unzip -o udacity.zip
+      SecurityGroups: 
+        - Ref: ServerSG
+      InstanceType: t2.micro
+      BlockDeviceMappings: 
+        - DeviceName: "/dev/sda1"
+          Ebs: 
+            VolumeSize: "10"
+      IamInstanceProfile: 
+        Ref: ProfileWithRolesForOurApp
+  
+  UdagramASG: 
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties: 
+      HealthCheckGracePeriod: 20
+      VPCZoneIdentifier: 
+      - Fn::ImportValue:
+          !Sub "${EnvironmentName}-PRIV-NETS"
+      LaunchConfigurationName: 
+        Ref: UdagramLaunchConfig
+      MinSize: "2"
+      MaxSize: "2"
+      TargetGroupARNs:
+      - Ref: UdagramTargetGroup
+      MetricsCollection: 
+        - 
+          Granularity: "1Minute"
+          Metrics: 
+            - "GroupMinSize"
+            - "GroupMaxSize"
+      Tags:
+        - Key: Environment
+          Value: 
+            !Sub "${EnvironmentName}"
+          PropagateAtLaunch: "true"
+
+  UdagramLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+      SecurityGroups: 
+      - Ref: ServerSG
+      Subnets: 
+      - Fn::ImportValue: !Sub "${EnvironmentName}-PUB1-SN"
+      - Fn::ImportValue: !Sub "${EnvironmentName}-PUB2-SN"
+
+
+  UdagramLBListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: 
+          Ref: UdagramTargetGroup
+      LoadBalancerArn: 
+        Ref: UdagramLB
+      Port: 80
+      Protocol: HTTP
+
+  UdagramLBListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties: 
+      Actions: 
+      - Type: forward
+        TargetGroupArn:
+          Ref: UdagramTargetGroup
+      Conditions: 
+      - Field: path-pattern
+        Values: [/]
+      ListenerArn: !Ref UdagramLBListener
+      Priority: 1
+
+
+  UdagramTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckPort: 80
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 8
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId: 
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-VPCID"
+
+
+Outputs:
+
+  LoadBalancerLink:
+    Description: The URL of UdagramLB
+    Value: !Join ["", ["http://",!GetAtt UdagramLB.DNSName]]
+
+
